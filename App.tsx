@@ -139,17 +139,15 @@ const App: React.FC = () => {
             setCredits(newData.credits);
           }
 
-          // 2. Détection activation mode Pro (Founding Member)
+          // 2. Détection activation mode Pro (Stripe Subscription)
           if (newData.is_pro && !oldData?.is_pro) {
             setToast({ 
               message: "Félicitations ! Votre accès Founding Member est actif.", 
               type: 'success' 
             });
-            // On bascule automatiquement la vue
             setCurrentView('pro-home');
           }
 
-          // Mise à jour globale du profil local
           setDbProfile(newData);
         }
       )
@@ -345,16 +343,37 @@ const App: React.FC = () => {
         {currentView === 'admin' && <AdminPage onBack={() => setCurrentView('profile')} />}
         {currentView === 'expat-home' && <ExpatHome userName={dbProfile?.full_name} credits={credits} unlockedCount={Object.keys(unlockedPros).length} onSearch={handleSearchSubmit} onGoToDashboard={() => setCurrentView('expat-dashboard')} onAddCredits={() => setCurrentView('credits')} onSwitchToPro={() => setPendingRoleSwitch('pro')} searchResults={searchResults} searchOriginName={searchOriginName} onClearSearch={() => setSearchResults(null)} unlockedPros={unlockedPros} onUnlock={handleUnlock} isSearching={isSearching} onViewProfile={setSelectedPro} onMessagePro={() => {}} onSetSearchResults={setSearchResults} currentUserId={user?.id} allRealPros={[]} profile={dbProfile} onAdminClick={() => setCurrentView('admin')} userCoords={userCoords} />}
         {currentView === 'pro-home' && <ProHome userName={dbProfile?.full_name} profile={dbProfile} onGoToDashboard={() => { setProDashboardEditMode(false); setCurrentView('pro-dashboard'); }} onEditProfile={() => { setProDashboardEditMode(true); setCurrentView('pro-dashboard'); }} onUpgrade={() => setCurrentView('subscription')} onSwitchToExpat={() => setPendingRoleSwitch('expat')} onViewProfile={setSelectedPro} onAdminClick={() => setCurrentView('admin')} />}
-        {currentView === 'pro-dashboard' && <ProfessionalDashboard profile={dbProfile} currentPlan={dbProfile?.pro_plan} planStatus={dbProfile?.plan_status} subscriptionEndsAt={dbProfile?.subscription_ends_at} cancelAtPeriodEnd={dbProfile?.cancel_at_period_end} onUpgradeClick={() => setCurrentView('subscription')} onViewProfile={setSelectedPro} onBack={() => setCurrentView('pro-home')} onCancelPlan={async () => { if (!user) return; try { const u = await cancelUserPlan(user.id); setDbProfile(u); } catch(e) { setToast({message: "Failed", type: 'error'}); } }} onReactivatePlan={async () => { if (!user) return; try { const u = await reactivateUserPlan(user.id); setDbProfile(u); } catch(e) { setToast({message: "Failed", type: 'error'}); } }} onUpdateProfile={async (d) => { if (!user) return; try { const u = await updateUserProfile(user.id, d); setDbProfile(u); } catch(e) { setToast({message: "Failed", type: 'error'}); } }} onUpdateComplete={async (d) => { if (!user) return; try { updated = await updateUserProfile(user.id, d); setDbProfile(updated); setToast({message: t('notifications.profileSaved'), type: 'success'}); setCurrentView('pro-home'); } catch(e) { setToast({message: "Failed", type: 'error'}); } }} initialEditMode={proDashboardEditMode} />}
+        {currentView === 'pro-dashboard' && (
+          <ProfessionalDashboard 
+            profile={dbProfile} 
+            currentPlan={dbProfile?.pro_plan} 
+            planStatus={dbProfile?.plan_status} 
+            subscriptionEndsAt={dbProfile?.subscription_ends_at} 
+            cancelAtPeriodEnd={dbProfile?.cancel_at_period_end} 
+            onUpgradeClick={() => setCurrentView('subscription')} 
+            onViewProfile={setSelectedPro} 
+            onBack={() => setCurrentView('pro-home')} 
+            onCancelPlan={async () => { if (!user) return; try { const u = await cancelUserPlan(user.id); setDbProfile(u); } catch(e) { setToast({message: "Failed", type: 'error'}); } }} 
+            onReactivatePlan={async () => { if (!user) return; try { const u = await reactivateUserPlan(user.id); setDbProfile(u); } catch(e) { setToast({message: "Failed", type: 'error'}); } }} 
+            onUpdateProfile={async (d) => { if (!user) return; try { const u = await updateUserProfile(user.id, d); setDbProfile(u); } catch(e) { setToast({message: "Failed", type: 'error'}); } }} 
+            onUpdateComplete={async (d) => { if (!user) return; try { const updated = await updateUserProfile(user.id, d); setDbProfile(updated); setToast({message: t('notifications.profileSaved'), type: 'success'}); setCurrentView('pro-home'); } catch(e) { setToast({message: "Failed", type: 'error'}); } }} 
+            initialEditMode={proDashboardEditMode} 
+          />
+        )}
         {currentView === 'expat-dashboard' && <ExpatDashboard credits={credits} unlockedPros={unlockedPros} unlockedProfessionalList={unlockedProfessionalList} userReviews={userReviews} preferredCity={dbProfile?.preferred_city || ''} onUpdateCity={() => {}} onFindPros={() => setCurrentView('expat-home')} onAddCredits={() => setCurrentView('credits')} onMessagePro={() => {}} onSubmitReview={async (p, s, t, st, a) => { if (!user) return; try { await submitProfessionalReview(user.id, p, s, t, st, a); const r = await getUserReviews(user.id); setUserReviews(r); } catch(e) { setToast({message: "Failed", type: 'error'}); } }} onSwitchToPro={() => setPendingRoleSwitch('pro')} onViewProfile={setSelectedPro} onBack={() => setCurrentView('expat-home')} onTriggerSearch={() => {}} userCoords={userCoords} />}
+        
         {currentView === 'subscription' && (
           <ProSubscriptionPage 
             profile={dbProfile} 
             onSelect={async (plan) => { 
               if (!user) return;
+              console.log("Plan sélectionné :", plan);
+              
               if (plan === 'early') {
-                // Redirection vers l'abonnement Stripe Founding Member
-                window.location.href = `${STRIPE_LINK_FOUNDING_MEMBER}?client_reference_id=${user.id}`;
+                const stripeUrl = `${STRIPE_LINK_FOUNDING_MEMBER}?client_reference_id=${user.id}`;
+                console.log("Redirection Stripe Founding Member...");
+                window.location.assign(stripeUrl);
+                return;
               } else {
                 try { 
                   const u = await updateUserPlan(user.id, plan); 
@@ -372,6 +391,7 @@ const App: React.FC = () => {
           />
         )}
       </main>
+
       {showHowItWorks && <HowItWorks onClose={() => setShowHowItWorks(false)} />}
       {selectedPro && <ProfileModal pro={selectedPro} isUnlocked={!!unlockedPros[selectedPro.id]} isAuth={!!user} isPremium={isPremium} isOwner={user?.id === selectedPro.id} currentUserId={user?.id} onClose={() => setSelectedPro(null)} onUnlock={handleUnlock} userCoords={userCoords} />}
       {pendingRoleSwitch && <ConfirmationModal isOpen={!!pendingRoleSwitch} onClose={() => setPendingRoleSwitch(null)} onConfirm={async () => { if (!pendingRoleSwitch) return; setIsRoleSwitchLoading(true); try { const u = await setUserRole(pendingRoleSwitch); setDbProfile(u); if (pendingRoleSwitch === 'pro') { if (!u.is_pro_complete) { setProDashboardEditMode(true); setCurrentView('pro-dashboard'); } else { setCurrentView('pro-home'); } } else { setCurrentView('expat-home'); } } catch(e) { setToast({message: "Failed", type: 'error'}); } finally { setIsRoleSwitchLoading(false) ; setPendingRoleSwitch(null); } }} isLoading={isRoleSwitchLoading} title={pendingRoleSwitch === 'pro' ? t('profile.switchToProTitle') : t('profile.switchToExpatTitle')} message={pendingRoleSwitch === 'pro' ? t('profile.switchToProMsg') : t('profile.switchToExpatMsg')} confirmLabel={t('common.confirm')} type={pendingRoleSwitch === 'pro' ? 'pro' : 'expat'} />}
