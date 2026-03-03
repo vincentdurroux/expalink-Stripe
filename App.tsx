@@ -129,22 +129,14 @@ const App: React.FC = () => {
           const newData = payload.new;
           const oldData = payload.old;
 
-          // 1. Détection ajout de crédits
           if (newData.credits > (oldData?.credits || 0)) {
             const added = newData.credits - (oldData?.credits || 0);
-            setToast({ 
-              message: t('notifications.creditsAdded', { count: added }), 
-              type: 'success' 
-            });
+            setToast({ message: t('notifications.creditsAdded', { count: added }), type: 'success' });
             setCredits(newData.credits);
           }
 
-          // 2. Détection activation mode Pro (Stripe Subscription)
           if (newData.is_pro && !oldData?.is_pro) {
-            setToast({ 
-              message: "Félicitations ! Votre accès Founding Member est actif.", 
-              type: 'success' 
-            });
+            setToast({ message: "Félicitations ! Votre accès Founding Member est actif.", type: 'success' });
             setCurrentView('pro-home');
           }
 
@@ -153,9 +145,7 @@ const App: React.FC = () => {
       )
       .subscribe();
 
-    return () => {
-      supabase.removeChannel(profileSubscription);
-    };
+    return () => { supabase.removeChannel(profileSubscription); };
   }, [user?.id, t]);
 
   const loadUserData = useCallback(async (userId: string) => {
@@ -177,24 +167,15 @@ const App: React.FC = () => {
         
         if (profile.role_selected) {
           if (profile.is_pro) {
-            if (!profile.is_pro_complete) {
-              setProDashboardEditMode(true);
-              setCurrentView('pro-dashboard');
-            } else {
-              setCurrentView('pro-home');
-            }
-          } else {
-            setCurrentView('expat-home');
-          }
+            if (!profile.is_pro_complete) { setProDashboardEditMode(true); setCurrentView('pro-dashboard'); }
+            else { setCurrentView('pro-home'); }
+          } else { setCurrentView('expat-home'); }
         } else if (currentView === 'auth') {
           setCurrentView('landing');
         }
       }
-    } catch (err: any) {
-      console.error("Error loading user data:", err);
-    } finally {
-      isFetchingRef.current = null;
-    }
+    } catch (err: any) { console.error("Error loading user data:", err); }
+    finally { isFetchingRef.current = null; }
   }, [currentView]);
 
   const clearUserData = useCallback(() => {
@@ -207,21 +188,14 @@ const App: React.FC = () => {
     setUnlockedPros({});
     setUnlockedProfessionalList([]);
     setUserReviews([]);
-    if (!['landing', 'auth'].includes(currentView)) {
-      setCurrentView('landing');
-    }
+    if (!['landing', 'auth'].includes(currentView)) { setCurrentView('landing'); }
   }, [currentView]);
 
   useEffect(() => {
     let isMounted = true;
     const performAuthSync = async (session: any) => {
       if (!isMounted) return;
-      if (!session?.user) {
-        clearUserData();
-        setLoading(false);
-        setIsProcessingAuth(false);
-        return;
-      }
+      if (!session?.user) { clearUserData(); setLoading(false); setIsProcessingAuth(false); return; }
       const userId = session.user.id;
       setUser(session.user);
       if (userId !== lastFetchedUserId.current) {
@@ -367,22 +341,24 @@ const App: React.FC = () => {
             profile={dbProfile} 
             onSelect={async (plan) => { 
               if (!user) return;
-              console.log("Plan sélectionné :", plan);
               
-              if (plan === 'early') {
+              // REDIRECTION STRIPE CRITIQUE ICI :
+              // On écoute 'early' OU le nom rpcName 'Founding Member' envoyé par le composant
+              if (plan === 'early' || plan === 'Founding Member') {
                 const stripeUrl = `${STRIPE_LINK_FOUNDING_MEMBER}?client_reference_id=${user.id}`;
-                console.log("Redirection Stripe Founding Member...");
+                console.log("🚀 Redirection vers Stripe Founding Member...");
                 window.location.assign(stripeUrl);
                 return;
-              } else {
-                try { 
-                  const u = await updateUserPlan(user.id, plan); 
-                  setDbProfile(u); 
-                  setCurrentView('pro-home'); 
-                } catch(e) { 
-                  setToast({message: "Failed", type: 'error'}); 
-                } 
-              }
+              } 
+
+              // Autres plans (si tu en rajoutes plus tard qui ne passent pas par Stripe)
+              try { 
+                const u = await updateUserPlan(user.id, plan); 
+                setDbProfile(u); 
+                setCurrentView('pro-home'); 
+              } catch(e) { 
+                setToast({message: "Failed", type: 'error'}); 
+              } 
             }} 
             onBack={() => setCurrentView('pro-home')} 
             currentPlan={dbProfile?.pro_plan} 
