@@ -43,7 +43,6 @@ import { Professional, UnlockToken, Review, SearchFilters, UserType } from './ty
 import { useTranslation } from 'react-i18next';
 
 // --- CONFIGURATION STRIPE ---
-// ATTENTION : Remplacez bien ces deux URLs par vos vrais liens Stripe différents !
 const STRIPE_LINK_1_CREDIT = "https://buy.stripe.com/test_9B64gz9kka7P3Wm8oR8Zq01";
 const STRIPE_LINK_5_CREDITS = "https://buy.stripe.com/test_dRmfZh5446VD78yfRj8Zq02";
 
@@ -111,6 +110,44 @@ const App: React.FC = () => {
       );
     }
   }, []);
+
+  // --- LOGIQUE REALTIME POUR LES CRÉDITS ---
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const profileSubscription = supabase
+      .channel(`profile-updates-${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'profiles',
+          filter: `id=eq.${user.id}`,
+        },
+        (payload) => {
+          const newCredits = payload.new.credits;
+          const oldCredits = dbProfile?.credits || 0;
+
+          if (newCredits > oldCredits) {
+            const added = newCredits - oldCredits;
+            // Notification de succès avec traduction
+            setToast({ 
+              message: t('notifications.creditsAdded', { count: added }), 
+              type: 'success' 
+            });
+            // Mise à jour immédiate de l'UI
+            setCredits(newCredits);
+            setDbProfile(payload.new);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(profileSubscription);
+    };
+  }, [user?.id, dbProfile?.credits, t]);
 
   const loadUserData = useCallback(async (userId: string) => {
     if (isFetchingRef.current === userId) return;
@@ -283,25 +320,11 @@ const App: React.FC = () => {
           <CreditsPage 
             currentCredits={credits} isAuth={!!user} isRoleSelected={!!dbProfile?.role_selected} 
             userId={user?.id} userEmail={user?.email} onAuthRequired={() => setCurrentView('auth')} 
-            
-            // --- LOGIQUE DE PAIEMENT CORRIGÉE ---
             onPurchase={async (amount: number) => {
               if (!user) return;
-              
-              console.log("Tentative d'achat, montant reçu :", amount);
-              
-              // On définit le bon lien en fonction du bouton cliqué
-              let stripeUrl = STRIPE_LINK_1_CREDIT;
-              if (amount === 5) {
-                stripeUrl = STRIPE_LINK_5_CREDITS;
-              }
-              
-              const finalRedirectionUrl = `${stripeUrl}?client_reference_id=${user.id}`;
-              console.log("Redirection vers :", finalRedirectionUrl);
-              
-              window.location.href = finalRedirectionUrl;
+              let stripeUrl = amount === 5 ? STRIPE_LINK_5_CREDITS : STRIPE_LINK_1_CREDIT;
+              window.location.href = `${stripeUrl}?client_reference_id=${user.id}`;
             }} 
-            
             onBack={() => setCurrentView(dbProfile?.role_selected ? (dbProfile.is_pro ? 'pro-dashboard' : 'expat-dashboard') : 'landing')} 
           />
         )}
