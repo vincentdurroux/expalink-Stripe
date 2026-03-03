@@ -211,7 +211,7 @@ const en = {
     pack2: { label: "Essential Pack", desc: "Best value for your relocation" }
   },
   notifications: {
-    noCredits: "You don't have enough credits.", unlocked: "Success! Congratulations! You can now access the full profile and contact details of this expert.", unlockError: "Error unlocking expert.",
+    creditsAdded: "Congratulations! {{count}} credit(s) added to your account.", noCredits: "You don't have enough credits.", unlocked: "Success! Congratulations! You can now access the full profile and contact details of this expert.", unlockError: "Error unlocking expert.",
     profileSaved: "Profile updated successfully!", creatingProfile: "Creating your professional profile. This can take up to 1 minute, please wait...",
     passwordChanged: "Password updated successfully!", passwordMismatch: "Passwords do not match.",
     oldPasswordIncorrect: "Current password is incorrect.",
@@ -655,7 +655,7 @@ const fr = {
     pack2: { label: "Pack Essentiel", desc: "La meilleure valeur pour votre installation" }
   },
   notifications: {
-    noCredits: "Vous n'avez pas assez de crédits.", unlocked: "Succès ! Félicitations ! Vous pouvez maintenant accéder au profil complet et aux coordonnées de cet expert.", unlockError: "Erreur lors du déblocage de l'expert.",
+    creditsAdded: "Félicitations ! {{count}} crédit(s) ajouté(s) à votre compte.", noCredits: "Vous n'avez pas assez de crédits.", unlocked: "Succès ! Félicitations ! Vous pouvez maintenant accéder au profil complet et aux coordonnées de cet expert.", unlockError: "Erreur lors du déblocage de l'expert.",
     profileSaved: "Profil mis à jour avec succès !", creatingProfile: "Création de votre profil professionnel. Cela peut prendre jusqu'à 1 minute, veuillez patienter...",
     passwordChanged: "Mot de passe mis à jour avec succès !", passwordMismatch: "Les mots de passe ne correspondent pas.",
     oldPasswordIncorrect: "Le mot de passe actuel est incorrect.",
@@ -1099,7 +1099,7 @@ const es = {
     pack2: { label: "Pack Esencial", desc: "La mejor opción para tu relocalización" }
   },
   notifications: {
-    noCredits: "No tienes suficientes créditos.", unlocked: "¡Éxito! ¡Felicidades! Ya puedes acceder al perfil completo y a los datos de contacto de este experto.", unlockError: "Error al desbloquear al experto.",
+    creditsAdded: "¡Felicidades! Se han añadido {{count}} crédito(s) a tu cuenta.", noCredits: "No tienes suficientes créditos.", unlocked: "¡Éxito! ¡Felicidades! Ya puedes acceder al perfil completo y a los datos de contacto de este experto.", unlockError: "Error al desbloquear al experto.",
     profileSaved: "¡Perfil actualizado con éxito!", creatingProfile: "Creando tu perfil profesional. Esto puede tardar hasta 1 minuto, por favor espera...",
     passwordChanged: "¡Contraseña actualizada con éxito!", passwordMismatch: "Las contraseñas no coinciden.",
     oldPasswordIncorrect: "La contraseña actual no es correcta.",
