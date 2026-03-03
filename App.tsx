@@ -42,9 +42,10 @@ import Toast, { ToastType } from './components/Toast';
 import { Professional, UnlockToken, Review, SearchFilters, UserType } from './types';
 import { useTranslation } from 'react-i18next';
 
-// --- CONFIGURATION STRIPE (MODIFIEZ CES LIENS) ---
+// --- CONFIGURATION STRIPE ---
+// ATTENTION : Remplacez bien ces deux URLs par vos vrais liens Stripe différents !
 const STRIPE_LINK_1_CREDIT = "https://buy.stripe.com/test_9B64gz9kka7P3Wm8oR8Zq01";
-const STRIPE_LINK_5_CREDITS = "https://buy.stripe.com/test_9B64gz9kka7P3Wm8oR8Zq01";
+const STRIPE_LINK_5_CREDITS = "https://buy.stripe.com/test_dRmfZh5446VD78yfRj8Zq02";
 
 const LIBRARIES: Libraries = ['places'];
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
@@ -282,12 +283,25 @@ const App: React.FC = () => {
           <CreditsPage 
             currentCredits={credits} isAuth={!!user} isRoleSelected={!!dbProfile?.role_selected} 
             userId={user?.id} userEmail={user?.email} onAuthRequired={() => setCurrentView('auth')} 
+            
+            // --- LOGIQUE DE PAIEMENT CORRIGÉE ---
             onPurchase={async (amount: number) => {
               if (!user) return;
-              // Redirection vers Stripe Payment Link avec ID utilisateur
-              const stripeUrl = amount === 5 ? STRIPE_LINK_5_CREDITS : STRIPE_LINK_1_CREDIT;
-              window.location.href = `${stripeUrl}?client_reference_id=${user.id}`;
+              
+              console.log("Tentative d'achat, montant reçu :", amount);
+              
+              // On définit le bon lien en fonction du bouton cliqué
+              let stripeUrl = STRIPE_LINK_1_CREDIT;
+              if (amount === 5) {
+                stripeUrl = STRIPE_LINK_5_CREDITS;
+              }
+              
+              const finalRedirectionUrl = `${stripeUrl}?client_reference_id=${user.id}`;
+              console.log("Redirection vers :", finalRedirectionUrl);
+              
+              window.location.href = finalRedirectionUrl;
             }} 
+            
             onBack={() => setCurrentView(dbProfile?.role_selected ? (dbProfile.is_pro ? 'pro-dashboard' : 'expat-dashboard') : 'landing')} 
           />
         )}
