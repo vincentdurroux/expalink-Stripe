@@ -81,16 +81,34 @@ const App: React.FC = () => {
   const isFetchingRef = useRef<string | null>(null);
   const lastFetchedUserId = useRef<string | null>(null);
 
-  // Stabilisation de la configuration Google Maps
   const googleMapsOptions = useMemo(() => ({
     id: 'google-map-script',
     googleMapsApiKey: GOOGLE_MAPS_API_KEY,
     libraries: LIBRARIES,
     language: i18n.language ? i18n.language.split('-')[0] : 'en',
     region: 'es'
-  }), [GOOGLE_MAPS_API_KEY]); // Dépendance stable pour éviter les rechargements de script
+  }), [GOOGLE_MAPS_API_KEY]);
 
   const { isLoaded, loadError } = useJsApiLoader(googleMapsOptions);
+
+  // --- LOGIQUE DE REDIRECTION APRÈS PAIEMENT ---
+  useEffect(() => {
+    const query = new URLSearchParams(window.location.search);
+    const isSuccess = query.get('payment_success');
+
+    if (isSuccess && dbProfile) {
+      // Nettoyage de l'URL pour la propreté
+      window.history.replaceState({}, document.title, "/");
+
+      if (dbProfile.is_pro) {
+        setCurrentView('pro-home');
+        setToast({ message: t('notifications.proActivated'), type: 'success' });
+      } else {
+        setCurrentView('expat-home');
+        setToast({ message: t('notifications.creditsAdded', { count: '' }), type: 'success' });
+      }
+    }
+  }, [dbProfile, t]);
 
   useEffect(() => {
     window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
@@ -135,7 +153,7 @@ const App: React.FC = () => {
           }
 
           if (newData.is_pro && !oldData?.is_pro) {
-            setToast({ message: t('notifications.proActivated') || "Félicitations ! Votre accès Founding Member est actif.", type: 'success' });
+            setToast({ message: t('notifications.proActivated'), type: 'success' });
             setCurrentView('pro-home');
           }
 
@@ -270,8 +288,9 @@ const App: React.FC = () => {
   if (loading || isProcessingAuth || (user && !dbProfile)) return null;
   if (loadError) return <div className="min-h-screen flex items-center justify-center p-10"><p className="font-bold text-red-500">Error loading Maps.</p></div>;
 
+  const DOMAIN = window.location.origin;
+
   return (
-    // La key force le rafraîchissement complet des textes quand la langue change
     <div className="min-h-screen relative" key={i18n.language}>
       <GlobalBackground />
       <Header 
@@ -307,7 +326,8 @@ const App: React.FC = () => {
               if (!user) return;
               const stripeUrl = amount === 5 ? STRIPE_LINK_5_CREDITS : STRIPE_LINK_1_CREDIT;
               const emailParam = encodeURIComponent(user.email || '');
-              window.location.href = `${stripeUrl}?client_reference_id=${user.id}&prefilled_email=${emailParam}&locale=${i18n.language.split('-')[0]}`;
+              const langParam = i18n.language.split('-')[0];
+              window.location.href = `${stripeUrl}?client_reference_id=${user.id}&prefilled_email=${emailParam}&locale=${langParam}&success_url=${DOMAIN}/?payment_success=true`;
             }} 
             onBack={() => setCurrentView(dbProfile?.role_selected ? (dbProfile.is_pro ? 'pro-dashboard' : 'expat-dashboard') : 'landing')} 
           />
@@ -345,7 +365,7 @@ const App: React.FC = () => {
               if (plan === 'early' || plan === 'Founding Member') {
                 const emailParam = encodeURIComponent(user.email || '');
                 const langParam = i18n.language.split('-')[0];
-                const stripeUrl = `${STRIPE_LINK_FOUNDING_MEMBER}?client_reference_id=${user.id}&prefilled_email=${emailParam}&locale=${langParam}`;
+                const stripeUrl = `${STRIPE_LINK_FOUNDING_MEMBER}?client_reference_id=${user.id}&prefilled_email=${emailParam}&locale=${langParam}&success_url=${DOMAIN}/?payment_success=true`;
                 window.location.assign(stripeUrl);
                 return;
               } 
