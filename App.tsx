@@ -81,15 +81,14 @@ const App: React.FC = () => {
   const isFetchingRef = useRef<string | null>(null);
   const lastFetchedUserId = useRef<string | null>(null);
 
-  const initialLang = useMemo(() => i18n.language ? i18n.language.split('-')[0] : 'en', [i18n.language]);
-  
+  // Stabilisation de la configuration Google Maps
   const googleMapsOptions = useMemo(() => ({
     id: 'google-map-script',
     googleMapsApiKey: GOOGLE_MAPS_API_KEY,
     libraries: LIBRARIES,
-    language: initialLang,
+    language: i18n.language ? i18n.language.split('-')[0] : 'en',
     region: 'es'
-  }), [initialLang]);
+  }), [GOOGLE_MAPS_API_KEY]); // Dépendance stable pour éviter les rechargements de script
 
   const { isLoaded, loadError } = useJsApiLoader(googleMapsOptions);
 
@@ -111,7 +110,7 @@ const App: React.FC = () => {
     }
   }, []);
 
-  // --- LOGIQUE REALTIME GLOBALE (CRÉDITS + ABONNEMENT) ---
+  // --- LOGIQUE REALTIME GLOBALE ---
   useEffect(() => {
     if (!user?.id) return;
 
@@ -136,7 +135,7 @@ const App: React.FC = () => {
           }
 
           if (newData.is_pro && !oldData?.is_pro) {
-            setToast({ message: "Félicitations ! Votre accès Founding Member est actif.", type: 'success' });
+            setToast({ message: t('notifications.proActivated') || "Félicitations ! Votre accès Founding Member est actif.", type: 'success' });
             setCurrentView('pro-home');
           }
 
@@ -272,7 +271,8 @@ const App: React.FC = () => {
   if (loadError) return <div className="min-h-screen flex items-center justify-center p-10"><p className="font-bold text-red-500">Error loading Maps.</p></div>;
 
   return (
-    <div className="min-h-screen relative">
+    // La key force le rafraîchissement complet des textes quand la langue change
+    <div className="min-h-screen relative" key={i18n.language}>
       <GlobalBackground />
       <Header 
         user={user} profile={dbProfile} credits={credits} isPremium={isPremium}
@@ -305,10 +305,9 @@ const App: React.FC = () => {
             userId={user?.id} userEmail={user?.email} onAuthRequired={() => setCurrentView('auth')} 
             onPurchase={async (amount: number) => {
               if (!user) return;
-              let stripeUrl = amount === 5 ? STRIPE_LINK_5_CREDITS : STRIPE_LINK_1_CREDIT;
-              // On pré-remplit l'email pour les crédits aussi
+              const stripeUrl = amount === 5 ? STRIPE_LINK_5_CREDITS : STRIPE_LINK_1_CREDIT;
               const emailParam = encodeURIComponent(user.email || '');
-              window.location.href = `${stripeUrl}?client_reference_id=${user.id}&prefilled_email=${emailParam}`;
+              window.location.href = `${stripeUrl}?client_reference_id=${user.id}&prefilled_email=${emailParam}&locale=${i18n.language.split('-')[0]}`;
             }} 
             onBack={() => setCurrentView(dbProfile?.role_selected ? (dbProfile.is_pro ? 'pro-dashboard' : 'expat-dashboard') : 'landing')} 
           />
@@ -343,27 +342,18 @@ const App: React.FC = () => {
             profile={dbProfile} 
             onSelect={async (plan) => { 
               if (!user) return;
-              
-              // On écoute 'early' ou le nom affiché 'Founding Member'
               if (plan === 'early' || plan === 'Founding Member') {
                 const emailParam = encodeURIComponent(user.email || '');
                 const langParam = i18n.language.split('-')[0];
-                
-                // On ajoute client_reference_id + prefilled_email + locale
                 const stripeUrl = `${STRIPE_LINK_FOUNDING_MEMBER}?client_reference_id=${user.id}&prefilled_email=${emailParam}&locale=${langParam}`;
-                
-                console.log("🚀 Redirection vers Stripe Founding Member avec email:", user.email);
                 window.location.assign(stripeUrl);
                 return;
               } 
-
               try { 
                 const u = await updateUserPlan(user.id, plan); 
                 setDbProfile(u); 
                 setCurrentView('pro-home'); 
-              } catch(e) { 
-                setToast({message: "Failed", type: 'error'}); 
-              } 
+              } catch(e) { setToast({message: "Failed", type: 'error'}); } 
             }} 
             onBack={() => setCurrentView('pro-home')} 
             currentPlan={dbProfile?.pro_plan} 
