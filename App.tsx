@@ -306,7 +306,9 @@ const App: React.FC = () => {
             onPurchase={async (amount: number) => {
               if (!user) return;
               let stripeUrl = amount === 5 ? STRIPE_LINK_5_CREDITS : STRIPE_LINK_1_CREDIT;
-              window.location.href = `${stripeUrl}?client_reference_id=${user.id}`;
+              // On pré-remplit l'email pour les crédits aussi
+              const emailParam = encodeURIComponent(user.email || '');
+              window.location.href = `${stripeUrl}?client_reference_id=${user.id}&prefilled_email=${emailParam}`;
             }} 
             onBack={() => setCurrentView(dbProfile?.role_selected ? (dbProfile.is_pro ? 'pro-dashboard' : 'expat-dashboard') : 'landing')} 
           />
@@ -342,16 +344,19 @@ const App: React.FC = () => {
             onSelect={async (plan) => { 
               if (!user) return;
               
-              // REDIRECTION STRIPE CRITIQUE ICI :
-              // On écoute 'early' OU le nom rpcName 'Founding Member' envoyé par le composant
+              // On écoute 'early' ou le nom affiché 'Founding Member'
               if (plan === 'early' || plan === 'Founding Member') {
-                const stripeUrl = `${STRIPE_LINK_FOUNDING_MEMBER}?client_reference_id=${user.id}`;
-                console.log("🚀 Redirection vers Stripe Founding Member...");
+                const emailParam = encodeURIComponent(user.email || '');
+                const langParam = i18n.language.split('-')[0];
+                
+                // On ajoute client_reference_id + prefilled_email + locale
+                const stripeUrl = `${STRIPE_LINK_FOUNDING_MEMBER}?client_reference_id=${user.id}&prefilled_email=${emailParam}&locale=${langParam}`;
+                
+                console.log("🚀 Redirection vers Stripe Founding Member avec email:", user.email);
                 window.location.assign(stripeUrl);
                 return;
               } 
 
-              // Autres plans (si tu en rajoutes plus tard qui ne passent pas par Stripe)
               try { 
                 const u = await updateUserPlan(user.id, plan); 
                 setDbProfile(u); 
