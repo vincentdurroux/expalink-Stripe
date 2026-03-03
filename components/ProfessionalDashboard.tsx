@@ -402,7 +402,7 @@ const ProfessionalDashboard: React.FC<ProfessionalDashboardProps> = ({
             <div className="flex items-center justify-between p-6 md:p-8 border-b border-gray-50 bg-white sticky top-0 z-10 shrink-0">
               <div className="flex items-center gap-4">
                 <div className="w-12 h-12 bg-amber-50 text-amber-500 rounded-2xl flex items-center justify-center shadow-inner"><MessageSquareQuote size={24} /></div>
-                <div><h3 className="text-xl font-bold text-gray-900 leading-tight">{t('common.reviews')}</h3><p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest">{reviews.length} {t('expatHome.expertsOnSite').toLowerCase()}</p></div>
+                <div><h3 className="text-xl font-bold text-gray-900 leading-tight">{t('common.reviews')}</h3></div>
               </div>
               <button onClick={() => setShowReviewsModal(false)} className="p-3 bg-gray-50 text-gray-400 rounded-full transition-all active:scale-90"><X size={24} /></button>
             </div>

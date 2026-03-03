@@ -33,20 +33,21 @@ serve(async (req) => {
       const userId = session.client_reference_id
 
       if (!userId) {
+        console.error("❌ Erreur: client_reference_id manquant")
         return new Response("No user ID", { status: 400 })
       }
 
-      // 1. On vérifie si c'est un abonnement (Founding Member) ou un paiement unique (Crédits)
       const isSubscription = session.mode === 'subscription';
 
       if (isSubscription) {
+        // --- LOGIQUE ABONNEMENT (FOUNDING MEMBER) ---
         console.log(`🚀 Activation PRO (Founding Member) pour: ${userId}`)
         
         const { error } = await supabase
           .from('profiles')
           .update({ 
             is_pro: true,
-            is_expat: false,       // 👈 CRUCIAL: Désactive Expat pour respecter la contrainte SQL
+            is_expat: false,       // Respect de la contrainte check_exclusive_role
             role_selected: true,
             pro_plan: 'Founding Member',
             plan_status: 'active',
@@ -57,31 +58,33 @@ serve(async (req) => {
         if (error) throw error
       } 
       else {
-        console.log(`💰 Ajout de crédits pour: ${userId}`)
+        // --- LOGIQUE ACHAT DE CRÉDITS ---
+        const amount = session.amount_total; // Montant reçu en centimes
         
-        // 2. Pour les crédits, on récupère d'abord le solde actuel
-        const { data: profile } = await supabase
+        // Calcul : 1€ (100cts) -> 1 crédit | 3€ (300cts) -> 5 crédits
+        // On fixe le seuil à 200cts (2€)
+        const creditsToAdd = amount >= 200 ? 5 : 1;
+        
+        console.log(`💰 Paiement unique reçu: ${amount} cts. Ajout de ${creditsToAdd} crédits pour: ${userId}`)
+        
+        // Récupération du solde actuel
+        const { data: profile, error: fetchError } = await supabase
           .from('profiles')
           .select('credits')
           .eq('id', userId)
           .single()
+        
+        if (fetchError) throw fetchError;
 
-        // Calcul du nombre de crédits à ajouter (basé sur le montant en centimes)
-        // Ajuste ces chiffres selon tes prix Stripe (ex: 500 = 5€)
-        const amount = session.amount_total;
-        let creditsToAdd = 1;
-        if (amount >= 1000) creditsToAdd = 5; // Exemple: si > 10€, on donne 5 crédits
-
-        const { error } = await supabase
+        const { error: updateError } = await supabase
           .from('profiles')
           .update({ 
             credits: (profile?.credits || 0) + creditsToAdd,
             updated_at: new Date().toISOString()
-            // 👈 Note: Ici on ne touche ni à is_pro ni à is_expat, donc pas d'erreur SQL !
           })
           .eq('id', userId)
 
-        if (error) throw error
+        if (updateError) throw updateError
       }
       
       console.log(`✅ Opération Stripe traitée avec succès pour ${userId}`)
