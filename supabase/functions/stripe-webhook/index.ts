@@ -1,68 +1,104 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
+import Stripe from "https://esm.sh/stripe@11.1.0?target=deno"
 
-// On n'importe PAS Stripe au début pour éviter les bugs de microtasks
-// On va juste parser le JSON nous-mêmes
+const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY') as string, {
+  apiVersion: '2022-11-15',
+  httpClient: Stripe.createFetchHttpClient(),
+})
+
+const cryptoProvider = Stripe.createSubtleCryptoProvider()
 
 serve(async (req) => {
-  const signature = req.headers.get('stripe-signature');
+  const signature = req.headers.get("stripe-signature")
 
-  // Sécurité simple si tu n'arrives pas à valider la signature : 
-  // On peut l'ajouter plus tard, testons d'abord si l'ID arrive.
-  
+  if (!signature) {
+    return new Response("Missing signature", { status: 400 })
+  }
+
   try {
-    const body = await req.json();
-    const eventType = body.type;
+    const body = await req.text()
+    const event = await stripe.webhooks.constructEventAsync(
+      body,
+      signature,
+      Deno.env.get("STRIPE_WEBHOOK_SECRET") as string,
+      undefined,
+      cryptoProvider
+    )
 
-    console.log("Événement reçu :", eventType);
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL") as string,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") as string
+    )
 
-    if (eventType === 'checkout.session.completed') {
-      const session = body.data.object;
-      const userId = session.client_reference_id;
-      const amountPaid = session.amount_total || 0;
-      
-      // Calcul des crédits : 100 centimes = 1, 300 centimes = 5
-      const creditsToAdd = amountPaid >= 300 ? 5 : 1;
+    if (event.type === 'checkout.session.completed') {
+      const session = event.data.object
+      const userId = session.client_reference_id
 
-      console.log(`Paiement reçu pour l'user: ${userId}, Montant: ${amountPaid}`);
+      if (!userId) {
+        console.error("No user ID found in client_reference_id")
+        return new Response("No user ID", { status: 400 })
+      }
 
-      if (userId) {
-        const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-        const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-        const supabase = createClient(supabaseUrl, supabaseKey);
+      // --- CAS 1 : ABONNEMENT (Founding Member / Monthly) ---
+      if (session.mode === 'subscription') {
+        console.log(`🔔 Processing subscription for user: ${userId}`)
+        
+        const { error } = await supabase
+          .from('profiles')
+          .update({ 
+            is_pro: true,
+            role_selected: true,
+            pro_plan: 'early', // ou récupérer dynamiquement via metadata si besoin
+            plan_status: 'trialing', 
+            subscription_id: session.subscription,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', userId)
+
+        if (error) throw error
+        console.log("✅ Pro profile activated via subscription")
+      } 
+
+      // --- CAS 2 : PAIEMENT UNIQUE (Crédits) ---
+      else if (session.mode === 'payment') {
+        console.log(`💰 Processing credit payment for user: ${userId}`)
+        
+        const amountTotal = session.amount_total || 0
+        // Logique de calcul des crédits selon le montant (en centimes)
+        // 200 = 2€ (1 crédit), 700 = 7€ (5 crédits) - À ajuster selon tes prix Stripe
+        const creditsToAdd = amountTotal > 500 ? 5 : 1
 
         // 1. Récupérer les crédits actuels
-        const { data: profile, error: fetchError } = await supabase
+        const { data: profile } = await supabase
           .from('profiles')
           .select('credits')
           .eq('id', userId)
-          .single();
+          .single()
 
-        if (fetchError) throw fetchError;
+        const currentCredits = profile?.credits || 0
 
-        // 2. Additionner et mettre à jour
-        const newTotal = (profile?.credits || 0) + creditsToAdd;
-        
-        const { error: updateError } = await supabase
+        // 2. Mettre à jour avec le nouveau solde
+        const { error } = await supabase
           .from('profiles')
-          .update({ credits: newTotal })
-          .eq('id', userId);
+          .update({ 
+            credits: currentCredits + creditsToAdd,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', userId)
 
-        if (updateError) throw updateError;
-
-        console.log(`SUCCÈS : ${creditsToAdd} crédits ajoutés. Nouveau total: ${newTotal}`);
-      } else {
-        console.error("ERREUR : Pas de client_reference_id trouvé dans la session Stripe");
+        if (error) throw error
+        console.log(`✅ Added ${creditsToAdd} credits to user ${userId}`)
       }
     }
 
     return new Response(JSON.stringify({ received: true }), { 
-      status: 200, 
+      status: 200,
       headers: { "Content-Type": "application/json" } 
-    });
+    })
 
   } catch (err) {
-    console.error("Erreur critique webhook :", err.message);
-    return new Response(JSON.stringify({ error: err.message }), { status: 400 });
+    console.error(`❌ Webhook Error: ${err.message}`)
+    return new Response(`Webhook Error: ${err.message}`, { status: 400 })
   }
 })

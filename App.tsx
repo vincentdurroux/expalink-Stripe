@@ -18,8 +18,7 @@ import {
   reactivateUserPlan,
   mapDBRowToPro,
   PRO_MINIMAL_COLUMNS,
-  PRO_PRIVATE_COLUMNS,
-  setPremiumStatus
+  PRO_PRIVATE_COLUMNS
 } from './services/userService';
 import { supabase } from './supabaseClient';
 import GlobalBackground from './components/GlobalBackground';
@@ -45,6 +44,7 @@ import { useTranslation } from 'react-i18next';
 // --- CONFIGURATION STRIPE ---
 const STRIPE_LINK_1_CREDIT = "https://buy.stripe.com/test_9B64gz9kka7P3Wm8oR8Zq01";
 const STRIPE_LINK_5_CREDITS = "https://buy.stripe.com/test_dRmfZh5446VD78yfRj8Zq02";
+const STRIPE_LINK_FOUNDING_MEMBER = "https://buy.stripe.com/test_00w9ATaoobbT9gG5cF8Zq03";
 
 const LIBRARIES: Libraries = ['places'];
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
@@ -111,7 +111,7 @@ const App: React.FC = () => {
     }
   }, []);
 
-  // --- LOGIQUE REALTIME POUR LES CRÉDITS ---
+  // --- LOGIQUE REALTIME GLOBALE (CRÉDITS + ABONNEMENT) ---
   useEffect(() => {
     if (!user?.id) return;
 
@@ -126,20 +126,31 @@ const App: React.FC = () => {
           filter: `id=eq.${user.id}`,
         },
         (payload) => {
-          const newCredits = payload.new.credits;
-          const oldCredits = dbProfile?.credits || 0;
+          const newData = payload.new;
+          const oldData = payload.old;
 
-          if (newCredits > oldCredits) {
-            const added = newCredits - oldCredits;
-            // Notification de succès avec traduction
+          // 1. Détection ajout de crédits
+          if (newData.credits > (oldData?.credits || 0)) {
+            const added = newData.credits - (oldData?.credits || 0);
             setToast({ 
               message: t('notifications.creditsAdded', { count: added }), 
               type: 'success' 
             });
-            // Mise à jour immédiate de l'UI
-            setCredits(newCredits);
-            setDbProfile(payload.new);
+            setCredits(newData.credits);
           }
+
+          // 2. Détection activation mode Pro (Founding Member)
+          if (newData.is_pro && !oldData?.is_pro) {
+            setToast({ 
+              message: "Félicitations ! Votre accès Founding Member est actif.", 
+              type: 'success' 
+            });
+            // On bascule automatiquement la vue
+            setCurrentView('pro-home');
+          }
+
+          // Mise à jour globale du profil local
+          setDbProfile(newData);
         }
       )
       .subscribe();
@@ -147,7 +158,7 @@ const App: React.FC = () => {
     return () => {
       supabase.removeChannel(profileSubscription);
     };
-  }, [user?.id, dbProfile?.credits, t]);
+  }, [user?.id, t]);
 
   const loadUserData = useCallback(async (userId: string) => {
     if (isFetchingRef.current === userId) return;
@@ -334,9 +345,32 @@ const App: React.FC = () => {
         {currentView === 'admin' && <AdminPage onBack={() => setCurrentView('profile')} />}
         {currentView === 'expat-home' && <ExpatHome userName={dbProfile?.full_name} credits={credits} unlockedCount={Object.keys(unlockedPros).length} onSearch={handleSearchSubmit} onGoToDashboard={() => setCurrentView('expat-dashboard')} onAddCredits={() => setCurrentView('credits')} onSwitchToPro={() => setPendingRoleSwitch('pro')} searchResults={searchResults} searchOriginName={searchOriginName} onClearSearch={() => setSearchResults(null)} unlockedPros={unlockedPros} onUnlock={handleUnlock} isSearching={isSearching} onViewProfile={setSelectedPro} onMessagePro={() => {}} onSetSearchResults={setSearchResults} currentUserId={user?.id} allRealPros={[]} profile={dbProfile} onAdminClick={() => setCurrentView('admin')} userCoords={userCoords} />}
         {currentView === 'pro-home' && <ProHome userName={dbProfile?.full_name} profile={dbProfile} onGoToDashboard={() => { setProDashboardEditMode(false); setCurrentView('pro-dashboard'); }} onEditProfile={() => { setProDashboardEditMode(true); setCurrentView('pro-dashboard'); }} onUpgrade={() => setCurrentView('subscription')} onSwitchToExpat={() => setPendingRoleSwitch('expat')} onViewProfile={setSelectedPro} onAdminClick={() => setCurrentView('admin')} />}
-        {currentView === 'pro-dashboard' && <ProfessionalDashboard profile={dbProfile} currentPlan={dbProfile?.pro_plan} planStatus={dbProfile?.plan_status} subscriptionEndsAt={dbProfile?.subscription_ends_at} cancelAtPeriodEnd={dbProfile?.cancel_at_period_end} onUpgradeClick={() => setCurrentView('subscription')} onViewProfile={setSelectedPro} onBack={() => setCurrentView('pro-home')} onCancelPlan={async () => { if (!user) return; try { const u = await cancelUserPlan(user.id); setDbProfile(u); } catch(e) { setToast({message: "Failed", type: 'error'}); } }} onReactivatePlan={async () => { if (!user) return; try { const u = await reactivateUserPlan(user.id); setDbProfile(u); } catch(e) { setToast({message: "Failed", type: 'error'}); } }} onUpdateProfile={async (d) => { if (!user) return; try { const u = await updateUserProfile(user.id, d); setDbProfile(u); } catch(e) { setToast({message: "Failed", type: 'error'}); } }} onUpdateComplete={async (d) => { if (!user) return; try { const updated = await updateUserProfile(user.id, d); setDbProfile(updated); setToast({message: t('notifications.profileSaved'), type: 'success'}); setCurrentView('pro-home'); } catch(e) { setToast({message: "Failed", type: 'error'}); } }} initialEditMode={proDashboardEditMode} />}
+        {currentView === 'pro-dashboard' && <ProfessionalDashboard profile={dbProfile} currentPlan={dbProfile?.pro_plan} planStatus={dbProfile?.plan_status} subscriptionEndsAt={dbProfile?.subscription_ends_at} cancelAtPeriodEnd={dbProfile?.cancel_at_period_end} onUpgradeClick={() => setCurrentView('subscription')} onViewProfile={setSelectedPro} onBack={() => setCurrentView('pro-home')} onCancelPlan={async () => { if (!user) return; try { const u = await cancelUserPlan(user.id); setDbProfile(u); } catch(e) { setToast({message: "Failed", type: 'error'}); } }} onReactivatePlan={async () => { if (!user) return; try { const u = await reactivateUserPlan(user.id); setDbProfile(u); } catch(e) { setToast({message: "Failed", type: 'error'}); } }} onUpdateProfile={async (d) => { if (!user) return; try { const u = await updateUserProfile(user.id, d); setDbProfile(u); } catch(e) { setToast({message: "Failed", type: 'error'}); } }} onUpdateComplete={async (d) => { if (!user) return; try { updated = await updateUserProfile(user.id, d); setDbProfile(updated); setToast({message: t('notifications.profileSaved'), type: 'success'}); setCurrentView('pro-home'); } catch(e) { setToast({message: "Failed", type: 'error'}); } }} initialEditMode={proDashboardEditMode} />}
         {currentView === 'expat-dashboard' && <ExpatDashboard credits={credits} unlockedPros={unlockedPros} unlockedProfessionalList={unlockedProfessionalList} userReviews={userReviews} preferredCity={dbProfile?.preferred_city || ''} onUpdateCity={() => {}} onFindPros={() => setCurrentView('expat-home')} onAddCredits={() => setCurrentView('credits')} onMessagePro={() => {}} onSubmitReview={async (p, s, t, st, a) => { if (!user) return; try { await submitProfessionalReview(user.id, p, s, t, st, a); const r = await getUserReviews(user.id); setUserReviews(r); } catch(e) { setToast({message: "Failed", type: 'error'}); } }} onSwitchToPro={() => setPendingRoleSwitch('pro')} onViewProfile={setSelectedPro} onBack={() => setCurrentView('expat-home')} onTriggerSearch={() => {}} userCoords={userCoords} />}
-        {currentView === 'subscription' && <ProSubscriptionPage profile={dbProfile} onSelect={async (p) => { if (!user) return; try { const u = await updateUserPlan(user.id, p); setDbProfile(u); setCurrentView('pro-home'); } catch(e) { setToast({message: "Failed", type: 'error'}); } }} onBack={() => setCurrentView('pro-home')} currentPlan={dbProfile?.pro_plan} onGoToEdit={() => { setProDashboardEditMode(true); setCurrentView('pro-dashboard'); }} onReactivate={async () => { if (!user) return; try { const u = await reactivateUserPlan(user.id); setDbProfile(u); setToast({message: t('notifications.profileSaved'), type: 'success'}); setCurrentView('pro-home'); } catch(e) { setToast({message: "Failed", type: 'error'}); } }} />}
+        {currentView === 'subscription' && (
+          <ProSubscriptionPage 
+            profile={dbProfile} 
+            onSelect={async (plan) => { 
+              if (!user) return;
+              if (plan === 'early') {
+                // Redirection vers l'abonnement Stripe Founding Member
+                window.location.href = `${STRIPE_LINK_FOUNDING_MEMBER}?client_reference_id=${user.id}`;
+              } else {
+                try { 
+                  const u = await updateUserPlan(user.id, plan); 
+                  setDbProfile(u); 
+                  setCurrentView('pro-home'); 
+                } catch(e) { 
+                  setToast({message: "Failed", type: 'error'}); 
+                } 
+              }
+            }} 
+            onBack={() => setCurrentView('pro-home')} 
+            currentPlan={dbProfile?.pro_plan} 
+            onGoToEdit={() => { setProDashboardEditMode(true); setCurrentView('pro-dashboard'); }} 
+            onReactivate={async () => { if (!user) return; try { const u = await reactivateUserPlan(user.id); setDbProfile(u); setToast({message: t('notifications.profileSaved'), type: 'success'}); setCurrentView('pro-home'); } catch(e) { setToast({message: "Failed", type: 'error'}); } }} 
+          />
+        )}
       </main>
       {showHowItWorks && <HowItWorks onClose={() => setShowHowItWorks(false)} />}
       {selectedPro && <ProfileModal pro={selectedPro} isUnlocked={!!unlockedPros[selectedPro.id]} isAuth={!!user} isPremium={isPremium} isOwner={user?.id === selectedPro.id} currentUserId={user?.id} onClose={() => setSelectedPro(null)} onUnlock={handleUnlock} userCoords={userCoords} />}
