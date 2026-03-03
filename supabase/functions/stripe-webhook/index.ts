@@ -1,46 +1,45 @@
-
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.46.1'
-import Stripe from 'https://esm.sh/stripe@14.16.0?target=deno'
-
-// Fix: Added @ts-ignore for Deno global access during Stripe initialization
-// @ts-ignore
-const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY') ?? '', {
-  apiVersion: '2023-10-16',
-  httpClient: Stripe.createFetchHttpClient(),
-})
-
-serve(async (req) => {
-  const signature = req.headers.get('stripe-signature')!
-  // Fix: Added @ts-ignore for Deno environment variable access
-  // @ts-ignore
-  const webhookSecret = Deno.env.get('STRIPE_WEBHOOK_SECRET')!
-  const body = await req.text()
-
-  try {
-    const event = stripe.webhooks.constructEvent(body, signature, webhookSecret)
-    // Fix: Added @ts-ignore for Deno globals when creating Supabase admin client
-    // @ts-ignore
-    const supabaseAdmin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)
-
-    if (event.type === 'checkout.session.completed') {
+if (event.type === 'checkout.session.completed') {
       const session = event.data.object
-      const { userId, type, amount } = session.metadata
+      
+      // PRIORITÉ 1: Récupérer l'ID utilisateur (indispensable)
+      // On le cherche dans client_reference_id (standard Payment Links) 
+      // ou dans metadata (si configuré manuellement)
+      const userId = session.client_reference_id || session.metadata?.userId
+
+      if (!userId) {
+        console.error("Pas d'ID utilisateur trouvé dans la session Stripe")
+        return new Response("No User ID", { status: 400 })
+      }
+
+      // PRIORITÉ 2: Déterminer le type (Abonnement ou Crédits)
+      // Si session.mode est 'subscription', c'est un abonnement
+      const isSubscription = session.mode === 'subscription'
+      const type = session.metadata?.type || (isSubscription ? 'subscription' : 'credits')
 
       if (type === 'credits') {
         const { data: profile } = await supabaseAdmin.from('profiles').select('credits').eq('id', userId).single()
-        const newCredits = (profile?.credits || 0) + parseInt(amount)
+        
+        // CALCUL AUTOMATIQUE DU NOMBRE DE CRÉDITS
+        // Si session.metadata.amount existe on l'utilise, 
+        // sinon on calcule selon le prix payé (ex: 500 centimes = 5€ = 5 crédits)
+        const creditsToSave = session.metadata?.amount 
+          ? parseInt(session.metadata.amount) 
+          : Math.floor(session.amount_total / 100) // 1 crédit par Euro payé
+
+        const newCredits = (profile?.credits || 0) + creditsToSave
+        
         await supabaseAdmin.from('profiles').update({ credits: newCredits }).eq('id', userId)
+        console.log(`Crédits ajoutés : ${creditsToSave} pour ${userId}`)
       } 
       else if (type === 'subscription') {
         await supabaseAdmin.from('profiles').update({ 
           is_subscribed: true, 
-          pro_plan: session.metadata.planName,
+          pro_plan: session.metadata?.planName || 'Pro Plan',
           plan_status: 'active'
         }).eq('id', userId)
       }
 
-      // Logger la transaction
+      // Logger la transaction (On garde ton code qui est excellent)
       await supabaseAdmin.from('transactions').insert({
         user_id: userId,
         stripe_session_id: session.id,
@@ -48,12 +47,6 @@ serve(async (req) => {
         currency: session.currency,
         status: 'completed',
         type: type,
-        metadata: session.metadata
+        metadata: session.metadata || {}
       })
     }
-
-    return new Response(JSON.stringify({ received: true }), { status: 200 })
-  } catch (err) {
-    return new Response(`Webhook Error: ${err.message}`, { status: 400 })
-  }
-})
