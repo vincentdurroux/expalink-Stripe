@@ -1,0 +1,7 @@
+{
+  "name": "ExpaLink - Connect Globally, Work Locally",
+  "description": "A premium platform connecting expatriates with trusted local professionals using AI-powered matching.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}
