@@ -153,7 +153,7 @@ const App: React.FC = () => {
           }
 
           if (newData.is_pro && !oldData?.is_pro) {
-            setToast({ message: "Succes!", type: 'success' });
+            setToast({ message: "Success!", type: 'success' });
             setCurrentView('pro-home');
           }
 
