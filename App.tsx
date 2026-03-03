@@ -43,7 +43,7 @@ import { Professional, UnlockToken, Review, SearchFilters, UserType } from './ty
 import { useTranslation } from 'react-i18next';
 
 const LIBRARIES: Libraries = ['places'];
-const GOOGLE_MAPS_API_KEY = "AIzaSyBzyegs-8Kh5meL9sosH26sBAKHQQE0gCA";
+const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
 
 const App: React.FC = () => {
   const { t, i18n } = useTranslation();
